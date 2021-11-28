@@ -19,7 +19,7 @@ public:
     void MakeSet(const VertexT& vertex) {
         parents_[vertex] = vertex;
         ranks_[vertex] = 1;
-        weights_[vertex] = 0;
+        weights_[vertex] = 1;
     }
 
     VertexT FindSet(const VertexT& vertex) {
@@ -37,7 +37,7 @@ public:
         return FindWeight(parents_[vertex]);
     }
 
-    void UnionSets(const VertexT& first, const VertexT& second, const WeightT& weight = 0) {
+    void UnionSets(const VertexT& first, const VertexT& second) {
         VertexT first_parent = FindSet(first);
         VertexT second_parent = FindSet(second);
         if (first_parent != second_parent) {
@@ -50,7 +50,6 @@ public:
             }
             weights_[first_parent] += weights_[second_parent];
         }
-        weights_[first_parent] += weight;
     }
 
 private:
@@ -60,31 +59,25 @@ private:
 };
 
 int main() {
-    std::ios_base::sync_with_stdio(false);
-    std::cin.tie(nullptr);
-    std::cout.tie(nullptr);
+    int32_t lands_num = 0;
+    int32_t bridges_num = 0;
+    std::cin >> lands_num >> bridges_num;
 
-    int32_t element_num = 0;
-    int32_t request_num = 0;
-    std::cin >> element_num >> request_num;
+    DSU country(lands_num);
+    int32_t min_bridges = 0;
 
-    DSU sets(element_num);
-
-    for (int32_t i = 0; i < request_num; ++i) {
-        int32_t command = 0;
-        std::cin >> command;
-        if (command == 1) {
-            VertexT first = 0;
-            VertexT second = 0;
-            WeightT weight = 0;
-            std::cin >> first >> second >> weight;
-            sets.UnionSets(first, second, weight);
-        } else {
-            VertexT vertex = 0;
-            std::cin >> vertex;
-            std::cout << sets.FindWeight(vertex) << '\n';
+    for (int32_t i = 0; i < bridges_num; ++i) {
+        VertexT first = 0;
+        VertexT second = 0;
+        std::cin >> first >> second;
+        country.UnionSets(first, second);
+        if (country.FindWeight(first) == lands_num) {
+            min_bridges = i + 1;
+            break;
         }
     }
+
+    std::cout << min_bridges << std::endl;
 
     return 0;
 }
