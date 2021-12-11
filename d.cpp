@@ -61,6 +61,7 @@ public:
     };
 
     static const int32_t kUNDEFINED;
+    static const VertexT kNOPREV;
 
     size_t GetVertexesNum() const {
         return vertexes_num_;
@@ -149,95 +150,35 @@ IGraph::VertexColoursT SwapColour(IGraph::VertexColoursT current_colour) {
     return (current_colour == IGraph::GREY_COLOUR) ? IGraph::BLACK_COLOUR : IGraph::GREY_COLOUR;
 }
 
-class DSU {
-public:
-    explicit DSU(int32_t vertexes_num) {
-        parents_.resize(vertexes_num + 1);
-        ranks_.resize(vertexes_num + 1);
-        weights_.resize(vertexes_num + 1);
-        for (int32_t i = 0; i < vertexes_num; ++i) {
-            MakeSet(i);
-        }
-        number_ = vertexes_num;
-    }
-
-    void MakeSet(const VertexT& vertex) {
-        parents_[vertex] = vertex;
-        ranks_[vertex] = 1;
-        weights_[vertex] = 0;
-    }
-
-    VertexT FindSet(const VertexT& vertex) {
-        if (vertex == parents_[vertex]) {
-            return vertex;
-        }
-        parents_[vertex] = FindSet(parents_[vertex]);
-        return parents_[vertex];
-    }
-
-    WeightT FindWeight(const VertexT& vertex) {
-        if (vertex == parents_[vertex]) {
-            return weights_[vertex];
-        }
-        return FindWeight(parents_[vertex]);
-    }
-
-    void UnionSets(const VertexT& first, const VertexT& second, const WeightT& weight = 0) {
-        VertexT first_parent = FindSet(first);
-        VertexT second_parent = FindSet(second);
-        if (first_parent != second_parent) {
-            if (ranks_[first_parent] < ranks_[second_parent]) {
-                std::swap(first_parent, second_parent);
-            }
-            parents_[second_parent] = first_parent;
-            if (ranks_[second_parent] == ranks_[first_parent]) {
-                ++ranks_[first_parent];
-            }
-            weights_[first_parent] += weights_[second_parent];
-            --number_;
-        }
-        weights_[first_parent] += weight;
-    }
-
-    int32_t GetSetNumber() {
-        return number_;
-    }
-
-private:
-    int32_t number_;
-    std::vector<VertexT> parents_;
-    std::vector<RankT> ranks_;
-    std::vector<WeightT> weights_;
-};
-
 const int32_t IGraph::kUNDEFINED = INT_MAX;
+const VertexT IGraph::kNOPREV = -1;
 
-WeightT PrimMstFindArray(const IGraph& graph) {
-    std::vector<WeightT> dist(graph.GetVertexesNum() + 1, IGraph::kUNDEFINED);
-    std::vector<VertexT> prev(graph.GetVertexesNum() + 1, -1);
-    std::set<VertexT> mst = {};
-    WeightT answer = 0;
-    dist[1] = 0;
+std::set<IGraph::Edge> PrimMstFindArray(const IGraph& graph) {
+    std::vector<WeightT> weights(graph.GetVertexesNum() + 1, IGraph::kUNDEFINED);
+    std::vector<VertexT> prev(graph.GetVertexesNum() + 1, IGraph::kNOPREV);
+    std::set<VertexT> used_vertexes = {};
+    std::set<IGraph::Edge> mst = {};
+    weights[1] = 0;
 
     while (mst.size() != graph.GetVertexesNum()) {
-        VertexT current_vertex = std::min_element(dist.begin(), dist.end()) - dist.begin();
-        mst.insert(current_vertex);
+        VertexT current_vertex = std::min_element(weights.begin(), weights.end()) - weights.begin();
+        used_vertexes.insert(current_vertex);
 
-        if (prev[current_vertex] != -1) {
-            answer += dist[current_vertex];
+        if (weights[current_vertex] != IGraph::kUNDEFINED) {
+            mst.emplace(prev[current_vertex], current_vertex, weights[current_vertex]);
         }
-        dist[current_vertex] = IGraph::kUNDEFINED;
+        weights[current_vertex] = IGraph::kUNDEFINED;
 
         for (auto current_neighbour : graph.GetNeighbours(current_vertex)) {
-            if (mst.find(current_neighbour.vertex_) == mst.end() &&
-                dist[current_neighbour.vertex_] > current_neighbour.weight_) {
+            if (used_vertexes.find(current_neighbour.vertex_) == used_vertexes.end() &&
+                weights[current_neighbour.vertex_] > current_neighbour.weight_) {
                 prev[current_neighbour.vertex_] = current_vertex;
-                dist[current_neighbour.vertex_] = current_neighbour.weight_;
+                weights[current_neighbour.vertex_] = current_neighbour.weight_;
             }
         }
     }
 
-    return answer;
+    return mst;
 }
 
 int main() {
@@ -249,21 +190,28 @@ int main() {
     std::cin >> vertexes_num;
     GraphTable graph(vertexes_num + 1);  // 1 for extra_vertex
 
-    for (int32_t i = 1; i < vertexes_num + 1; ++i) {
-        for (int32_t j = 1; j < vertexes_num + 1; ++j) {
-            WeightT value = 0;
-            std::cin >> value;
-            graph.InsertEdge(i, j, value);
+    for (int32_t from = 1; from < vertexes_num + 1; ++from) {
+        for (int32_t to = 1; to < vertexes_num + 1; ++to) {
+            WeightT weight = 0;
+            std::cin >> weight;
+            graph.InsertEdge(from, to, weight);
         }
     }
 
-    for (int32_t i = 1; i < vertexes_num + 1; ++i) {
+    for (int32_t current_vertex = 1; current_vertex < vertexes_num + 1; ++current_vertex) {
         WeightT weight = 0;
         std::cin >> weight;
-        graph.InsertEdge(0, i, weight);
+        graph.InsertEdge(0, current_vertex, weight);
     }
 
-    std::cout << PrimMstFindArray(graph) << std::endl;
+    std::set<IGraph::Edge> mst = PrimMstFindArray(graph);
+
+    int64_t sum = 0;
+    for (auto edge : mst) {
+        sum += edge.weight_;
+    }
+
+    std::cout << sum << std::endl;
 
     return 0;
 }
