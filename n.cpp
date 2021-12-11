@@ -172,19 +172,17 @@ IGraph::VertexColoursT SwapColour(IGraph::VertexColoursT current_colour) {
 const int64_t IGraph::kUNDEFINED = 1'000'000'000;
 
 std::vector<std::vector<WeightT>> FindShortestPathsBetweenAll(const IGraph& graph) {
-    std::vector<std::vector<WeightT>> old_weights = graph.GetEdges();
-    std::vector<std::vector<WeightT>> new_weights = old_weights;
+    std::vector<std::vector<WeightT>> weights = graph.GetEdges();
 
     for (size_t i = 1; i < graph.GetVertexesNum() + 1; ++i) {
-        std::swap(old_weights, new_weights);
         for (VertexT from = 1; from < static_cast<VertexT>(graph.GetVertexesNum() + 1); ++from) {
             for (VertexT to = 1; to < static_cast<VertexT>(graph.GetVertexesNum() + 1); ++to) {
-                new_weights[from][to] = std::min(old_weights[from][to], old_weights[from][i] + old_weights[i][to]);
+                weights[from][to] = std::min(weights[from][to], weights[from][i] + weights[i][to]);
             }
         }
     }
 
-    return new_weights;
+    return weights;
 }
 
 int main() {
