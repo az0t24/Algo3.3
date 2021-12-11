@@ -34,26 +34,13 @@ public:
         VertexT from_;
         VertexT to_;
         WeightT weight_;
-        WeightT time_in_;
-        WeightT time_out_;
         int32_t number_;
-        WeightT flow_;
-        WeightT flow_capacity_;
 
         Edge(const VertexT& first, const VertexT& second, const VertexT& weight) {
             from_ = first;
             to_ = second;
             weight_ = weight;
-            flow_capacity_ = weight;
-            flow_ = 0;
             number_ = 0;
-        }
-
-        Edge(const VertexT& first, const VertexT& second, const WeightT& time_in, const WeightT& time_out) {
-            from_ = first;
-            to_ = second;
-            time_in_ = time_in;
-            time_out_ = time_out;
         }
 
         friend bool operator<(const Edge& first, const Edge& second) {
@@ -71,7 +58,7 @@ public:
         BLACK_COLOUR = 2,
     };
 
-    static const int64_t kUNDEFINED;
+    static const int32_t kUNDEFINED;
 
     size_t GetVertexesNum() const {
         return vertexes_num_;
@@ -81,13 +68,18 @@ public:
         return edges_num_;
     }
 
+    bool IsOriented() const {
+        return is_oriented_;
+    }
+
     virtual std::vector<Edge>& GetEdges(const VertexT& vert) = 0;
-    virtual std::vector<Edge> GetEdges(const VertexT& vert) const = 0;
+    virtual const std::vector<Edge>& GetEdges(const VertexT& vert) const = 0;
     virtual std::vector<VertexT> GetNeighboursVertex(const VertexT& vert) const = 0;
     virtual std::vector<WeightT> GetNeighboursWeight(const VertexT& vert) const = 0;
     virtual std::vector<GraphNeighboursNode> GetNeighbours(const VertexT& vert) const = 0;
     virtual void InsertEdge(const VertexT& x, const VertexT& y, const WeightT& weight = 0) = 0;
-    virtual void InsertEdge(const VertexT& x, const VertexT& y, const WeightT& time_in, const WeightT& time_out) = 0;
+    virtual void ChangeEdge(const Edge& edge, const WeightT& delta) = 0;
+    virtual Edge GetOppositeEdge(const VertexT source, const VertexT destination) = 0;
 
 protected:
     size_t vertexes_num_;
@@ -104,6 +96,18 @@ public:
         adjacency_list_.resize(vertexes_num_ + 1, {});
     }
 
+    explicit GraphList(const IGraph& graph) {
+        vertexes_num_ = graph.GetVertexesNum();
+        is_oriented_ = graph.IsOriented();
+        adjacency_list_.resize(vertexes_num_ + 1);
+
+        for (size_t current = 0; current < graph.GetVertexesNum(); ++current) {
+            for (auto edge : graph.GetEdges(current)) {
+                InsertEdge(edge.from_, edge.to_, edge.weight_);
+            }
+        }
+    }
+
     void InsertEdge(const VertexT& first, const VertexT& second, const WeightT& weight = 0) override {
         if (is_oriented_) {
             InsertEdgeOriented(first, second, weight);
@@ -112,46 +116,54 @@ public:
         }
     }
 
-    void InsertEdge(const VertexT& first, const VertexT& second, const WeightT& time_in,
-                    const WeightT& time_out) override {
-        if (is_oriented_) {
-            InsertEdgeOriented(first, second, time_in, time_out);
-        } else {
-            InsertEdgeNotOriented(first, second, time_in, time_out);
-        }
-    }
-
     std::vector<VertexT> GetNeighboursVertex(const VertexT& vert) const override {
-        std::vector<VertexT> answer(adjacency_list_[vert].size());
-        for (size_t i = 0; i < answer.size(); ++i) {
-            answer[i] = adjacency_list_[vert][i].to_;
+        std::vector<VertexT> neighbours_vertexes(adjacency_list_[vert].size());
+        for (size_t i = 0; i < neighbours_vertexes.size(); ++i) {
+            neighbours_vertexes[i] = adjacency_list_[vert][i].to_;
         }
-        return answer;
+        return neighbours_vertexes;
     }
 
     std::vector<WeightT> GetNeighboursWeight(const VertexT& vert) const override {
-        std::vector<WeightT> answer(adjacency_list_[vert].size());
-        for (size_t i = 0; i < answer.size(); ++i) {
-            answer[i] = adjacency_list_[vert][i].weight_;
+        std::vector<WeightT> neighbours_weights(adjacency_list_[vert].size());
+        for (size_t i = 0; i < neighbours_weights.size(); ++i) {
+            neighbours_weights[i] = adjacency_list_[vert][i].weight_;
         }
-        return answer;
+        return neighbours_weights;
     }
 
     std::vector<GraphNeighboursNode> GetNeighbours(const VertexT& vert) const override {
-        std::vector<GraphNeighboursNode> answer(adjacency_list_[vert].size());
-        for (size_t i = 0; i < answer.size(); ++i) {
-            answer[i].vertex_ = adjacency_list_[vert][i].to_;
-            answer[i].weight_ = adjacency_list_[vert][i].weight_;
+        std::vector<GraphNeighboursNode> neighbours;
+        for (auto edge : adjacency_list_[vert]) {
+            neighbours.push_back({edge.to_, edge.weight_});
         }
-        return answer;
+        return neighbours;
     }
 
     std::vector<Edge>& GetEdges(const VertexT& vert) override {
         return adjacency_list_[vert];
     }
 
-    std::vector<Edge> GetEdges(const VertexT& vert) const override {
+    const std::vector<Edge>& GetEdges(const VertexT& vert) const override {
         return adjacency_list_[vert];
+    }
+
+    void ChangeEdge(const Edge& edge, const WeightT& delta) override {
+        int32_t i = 0;
+        while (edge.to_ != adjacency_list_[edge.from_][i].to_ || edge.from_ != adjacency_list_[edge.from_][i].from_) {
+            ++i;
+        }
+        adjacency_list_[edge.from_][i].weight_ += delta;
+    }
+
+    Edge GetOppositeEdge(const VertexT source, const VertexT destination) override {
+        for (auto edge : adjacency_list_[destination]) {
+            if (edge.to_ == source) {
+                return edge;
+            }
+        }
+        InsertEdge(destination, source);
+        return {destination, source, 0};
     }
 
 private:
@@ -161,79 +173,78 @@ private:
         adjacency_list_[first].emplace_back(first, second, weight);
     }
 
-    void InsertEdgeOriented(const VertexT& first, const VertexT& second, const WeightT& time_in,
-                            const WeightT& time_out) {
-        adjacency_list_[first].emplace_back(first, second, time_in, time_out);
-    }
-
     void InsertEdgeNotOriented(const VertexT& first, const VertexT& second, const WeightT& weight = 0) {
         adjacency_list_[first].emplace_back(first, second, weight);
         adjacency_list_[second].emplace_back(second, first, weight);
-    }
-
-    void InsertEdgeNotOriented(const VertexT& first, const VertexT& second, const WeightT& time_in,
-                               const WeightT& time_out) {
-        adjacency_list_[first].emplace_back(first, second, time_in, time_out);
-        adjacency_list_[second].emplace_back(second, first, time_in, time_out);
     }
 };
 
 const int64_t IGraph::kUNDEFINED = 1'000'000'000;
 
-WeightT FindShortestPathsDijkstraArray(const IGraph& graph, const VertexT start, const VertexT end) {
-    const int64_t no_path_code = IGraph::kUNDEFINED;
-    std::vector<WeightT> dist(graph.GetVertexesNum() + 1, no_path_code);
-    std::vector<WeightT> dist_unuse(graph.GetVertexesNum() + 1, no_path_code);
+std::vector<WeightT> FindShortestPathToAllVertexes(const IGraph& graph, const VertexT vertex) {
+    std::vector<WeightT> dist(graph.GetVertexesNum() + 1, IGraph::kUNDEFINED);
+    std::vector<bool> is_in_queue(graph.GetVertexesNum() + 1, false);
+    dist[vertex] = 0;
+    std::queue<VertexT> temp_queue;
+    temp_queue.push(vertex);
+    is_in_queue[vertex] = true;
 
-    dist[start] = 0;
-    dist_unuse[start] = 0;
-    std::set<VertexT> mst = {};
+    while (!temp_queue.empty()) {
+        VertexT current_vertex = temp_queue.front();
+        temp_queue.pop();
+        is_in_queue[current_vertex] = false;
 
-    while (mst.size() != graph.GetVertexesNum()) {
-        VertexT current_vertex = std::min_element(dist_unuse.begin(), dist_unuse.end()) - dist_unuse.begin();
-        mst.insert(current_vertex);
-        dist_unuse[current_vertex] = IGraph::kUNDEFINED + 1;
-
-        for (auto current_neighbour : graph.GetNeighbours(current_vertex)) {
-            VertexT vertex_to = current_neighbour.vertex_;
-            WeightT weight = current_neighbour.weight_;
-            if (mst.find(vertex_to) == mst.end() && dist[vertex_to] > dist[current_vertex] + weight) {
-                dist[vertex_to] = weight + dist[current_vertex];
-                dist_unuse[vertex_to] = dist[vertex_to];
+        for (auto edge : graph.GetEdges(current_vertex)) {
+            if (!is_in_queue[edge.to_] && dist[edge.to_] > dist[current_vertex] + 1) {
+                dist[edge.to_] = dist[current_vertex] + 1;
+                temp_queue.push(edge.to_);
+                is_in_queue[edge.to_] = true;
             }
         }
     }
 
-    return (dist[end] == IGraph::kUNDEFINED) ? -1 : dist[end];
+    return dist;
+}
+
+WeightT FindPathLength(const IGraph& graph, const VertexT from, const VertexT to) {
+    std::vector<WeightT> dist(graph.GetVertexesNum() + 1, IGraph::kUNDEFINED);
+
+    dist[from] = 0;
+
+    for (size_t i = 0; i < graph.GetEdgesNum(); ++i) {
+        for (VertexT current_vertex = 1; current_vertex < static_cast<VertexT>(graph.GetVertexesNum() + 1);
+             ++current_vertex) {
+            for (auto edge : graph.GetEdges(current_vertex)) {
+                if (dist[edge.from_] <= edge.time_out_ && edge.time_in_ < dist[edge.to_]) {
+                    dist[edge.to_] = edge.time_in_;
+                }
+            }
+        }
+    }
+
+    return dist[to];
 }
 
 int main() {
-    std::ios_base::sync_with_stdio(false);
-    std::cin.tie(nullptr);
-    std::cout.tie(nullptr);
-
-    int32_t vertexes_num = 0;
-
-    std::cin >> vertexes_num;
-    GraphList graph(vertexes_num, 0, true);
-
+    int32_t stations = 0;
     VertexT start = 0;
     VertexT end = 0;
-    std::cin >> start >> end;
+    int32_t teleports = 0;
+    std::cin >> stations >> start >> end >> teleports;
 
-    for (int32_t i = 1; i < vertexes_num + 1; ++i) {
-        for (int32_t j = 1; j < vertexes_num + 1; ++j) {
-            WeightT weight = 0;
+    GraphList graph(stations, teleports, true);
 
-            std::cin >> weight;
-            if (weight == 0 || weight == -1) {
-                continue;
-            }
-            graph.InsertEdge(i, j, weight);
-        }
+    for (int32_t i = 0; i < teleports; ++i) {
+        VertexT from = 0;
+        VertexT to = 0;
+        WeightT time_in = 0;
+        WeightT time_out = 0;
+        std::cin >> from >> time_out >> to >> time_in;
+
+        graph.InsertEdge(from, to, time_in, time_out);
     }
 
-    std::cout << FindShortestPathsDijkstraArray(graph, start, end) << std::endl;
+    std::cout << FindPathLength(graph, start, end) << std::endl;
 
     return 0;
 }
