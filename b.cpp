@@ -1,45 +1,49 @@
 #include <iostream>
 #include <vector>
 
-using VertexT = int32_t;
-using RankT = int32_t;
 using WeightT = int32_t;
+using VertexT = int32_t;
 
+template <typename T>
+class FunctorSum {
+public:
+    T operator()(const T& first, const T& second) const {
+        return first + second;
+    }
+};
+
+template <typename ElemT, typename CompValueT, typename Functor>
 class DSU {
 public:
     explicit DSU(int32_t vertexes_num) {
         parents_.resize(vertexes_num + 1);
         ranks_.resize(vertexes_num + 1);
-        weights_.resize(vertexes_num + 1);
+        comp_values_.resize(vertexes_num + 1);
         for (int32_t i = 0; i < vertexes_num; ++i) {
             MakeSet(i);
         }
     }
 
-    void MakeSet(const VertexT& vertex) {
+    void MakeSet(const ElemT& vertex) {
         parents_[vertex] = vertex;
         ranks_[vertex] = 1;
-        weights_[vertex] = 0;
+        comp_values_[vertex] = 0;
     }
 
-    VertexT FindSet(const VertexT& vertex) {
+    CompValueT FindWeight(const ElemT& vertex) {
         if (vertex == parents_[vertex]) {
-            return vertex;
-        }
-        parents_[vertex] = FindSet(parents_[vertex]);
-        return parents_[vertex];
-    }
-
-    WeightT FindWeight(const VertexT& vertex) {
-        if (vertex == parents_[vertex]) {
-            return weights_[vertex];
+            return comp_values_[vertex];
         }
         return FindWeight(parents_[vertex]);
     }
 
-    void UnionSets(const VertexT& first, const VertexT& second, const WeightT& weight = 0) {
-        VertexT first_parent = FindSet(first);
-        VertexT second_parent = FindSet(second);
+    bool IsInOneComp(const ElemT& first, const ElemT& second) {
+        return FindSet(first) == FindSet(second);
+    }
+
+    void UnionSets(const ElemT& first, const ElemT& second, const CompValueT& comp_value = 0) {
+        ElemT first_parent = FindSet(first);
+        ElemT second_parent = FindSet(second);
         if (first_parent != second_parent) {
             if (ranks_[first_parent] < ranks_[second_parent]) {
                 std::swap(first_parent, second_parent);
@@ -48,15 +52,25 @@ public:
             if (ranks_[second_parent] == ranks_[first_parent]) {
                 ++ranks_[first_parent];
             }
-            weights_[first_parent] += weights_[second_parent];
+            comp_values_[first_parent] = func_(comp_values_[second_parent], comp_values_[first_parent]);
         }
-        weights_[first_parent] += weight;
+        comp_values_[first_parent] = func_(comp_value, comp_values_[first_parent]);
     }
 
 private:
-    std::vector<VertexT> parents_;
+    using RankT = int32_t;
+    std::vector<ElemT> parents_;
     std::vector<RankT> ranks_;
-    std::vector<WeightT> weights_;
+    std::vector<CompValueT> comp_values_;
+    Functor func_;
+
+    ElemT FindSet(const ElemT& vertex) {
+        if (vertex == parents_[vertex]) {
+            return vertex;
+        }
+        parents_[vertex] = FindSet(parents_[vertex]);
+        return parents_[vertex];
+    }
 };
 
 int main() {
@@ -68,7 +82,7 @@ int main() {
     int32_t request_num = 0;
     std::cin >> element_num >> request_num;
 
-    DSU sets(element_num);
+    DSU<VertexT, WeightT, FunctorSum<WeightT>> sets(element_num);
 
     for (int32_t i = 0; i < request_num; ++i) {
         int32_t command = 0;
