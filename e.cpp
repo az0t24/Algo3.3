@@ -35,15 +35,11 @@ public:
         VertexT to_;
         WeightT weight_;
         int32_t number_;
-        WeightT flow_;
-        WeightT flow_capacity_;
 
         Edge(const VertexT& first, const VertexT& second, const VertexT& weight) {
             from_ = first;
             to_ = second;
             weight_ = weight;
-            flow_capacity_ = weight;
-            flow_ = 0;
             number_ = 0;
         }
 
@@ -82,15 +78,13 @@ public:
     virtual std::vector<WeightT> GetNeighboursWeight(const VertexT& vert) const = 0;
     virtual std::vector<GraphNeighboursNode> GetNeighbours(const VertexT& vert) const = 0;
     virtual void InsertEdge(const VertexT& x, const VertexT& y, const WeightT& weight = 0) = 0;
-    virtual void ChangeFlow(Edge edge, WeightT delta) = 0;
+    virtual void ChangeEdge(const Edge& edge, const WeightT& delta) = 0;
+    virtual Edge GetOppositeEdge(const VertexT source, const VertexT destination) = 0;
 
 protected:
     size_t vertexes_num_;
     size_t edges_num_;
     bool is_oriented_ = false;
-
-private:
-    virtual void CreateOppositeEdge(const VertexT source, const VertexT destination) = 0;
 };
 
 class GraphList final : public IGraph {
@@ -123,28 +117,27 @@ public:
     }
 
     std::vector<VertexT> GetNeighboursVertex(const VertexT& vert) const override {
-        std::vector<VertexT> answer(adjacency_list_[vert].size());
-        for (size_t i = 0; i < answer.size(); ++i) {
-            answer[i] = adjacency_list_[vert][i].to_;
+        std::vector<VertexT> neighbours_vertexes(adjacency_list_[vert].size());
+        for (size_t i = 0; i < neighbours_vertexes.size(); ++i) {
+            neighbours_vertexes[i] = adjacency_list_[vert][i].to_;
         }
-        return answer;
+        return neighbours_vertexes;
     }
 
     std::vector<WeightT> GetNeighboursWeight(const VertexT& vert) const override {
-        std::vector<WeightT> answer(adjacency_list_[vert].size());
-        for (size_t i = 0; i < answer.size(); ++i) {
-            answer[i] = adjacency_list_[vert][i].weight_;
+        std::vector<WeightT> neighbours_weights(adjacency_list_[vert].size());
+        for (size_t i = 0; i < neighbours_weights.size(); ++i) {
+            neighbours_weights[i] = adjacency_list_[vert][i].weight_;
         }
-        return answer;
+        return neighbours_weights;
     }
 
     std::vector<GraphNeighboursNode> GetNeighbours(const VertexT& vert) const override {
-        std::vector<GraphNeighboursNode> answer(adjacency_list_[vert].size());
-        for (size_t i = 0; i < answer.size(); ++i) {
-            answer[i].vertex_ = adjacency_list_[vert][i].to_;
-            answer[i].weight_ = adjacency_list_[vert][i].weight_;
+        std::vector<GraphNeighboursNode> neighbours;
+        for (auto edge : adjacency_list_[vert]) {
+            neighbours.push_back({edge.to_, edge.weight_});
         }
-        return answer;
+        return neighbours;
     }
 
     std::vector<Edge>& GetEdges(const VertexT& vert) override {
@@ -155,18 +148,22 @@ public:
         return adjacency_list_[vert];
     }
 
-    void ChangeFlow(Edge edge, WeightT delta) override {
+    void ChangeEdge(const Edge& edge, const WeightT& delta) override {
         int32_t i = 0;
         while (edge.to_ != adjacency_list_[edge.from_][i].to_ || edge.from_ != adjacency_list_[edge.from_][i].from_) {
             ++i;
         }
-        adjacency_list_[edge.from_][i].flow_ += delta;
-        CreateOppositeEdge(edge.from_, edge.to_);
-        i = 0;
-        while (edge.to_ != adjacency_list_[edge.to_][i].from_ || edge.from_ != adjacency_list_[edge.to_][i].to_) {
-            ++i;
+        adjacency_list_[edge.from_][i].weight_ += delta;
+    }
+
+    Edge GetOppositeEdge(const VertexT source, const VertexT destination) override {
+        for (auto edge : adjacency_list_[destination]) {
+            if (edge.to_ == source) {
+                return edge;
+            }
         }
-        adjacency_list_[edge.to_][i].flow_ -= delta;
+        InsertEdge(destination, source);
+        return {destination, source, 0};
     }
 
 private:
@@ -179,15 +176,6 @@ private:
     void InsertEdgeNotOriented(const VertexT& first, const VertexT& second, const WeightT& weight = 0) {
         adjacency_list_[first].emplace_back(first, second, weight);
         adjacency_list_[second].emplace_back(second, first, weight);
-    }
-
-    void CreateOppositeEdge(const VertexT source, const VertexT destination) override {
-        for (auto edge : adjacency_list_[destination]) {
-            if (edge.to_ == source) {
-                return;
-            }
-        }
-        InsertEdge(destination, source);
     }
 };
 
@@ -207,41 +195,46 @@ WeightT FindPath(IGraph& graph, const VertexT source, const VertexT destination,
     WeightT delta = 0;
 
     for (auto edge : graph.GetEdges(source)) {
-        if (edge.flow_capacity_ - edge.flow_ <= 0) {
+        if (edge.weight_ <= 0) {
             continue;
         }
 
         if ((delta = FindPath(graph, edge.to_, destination, path, used)) != 0) {
             path.push_back(edge);
             if (delta == -1) {
-                return edge.flow_capacity_ - edge.flow_;
+                return edge.weight_;
             }
-            return std::min(delta, edge.flow_capacity_ - edge.flow_);
+            return std::min(delta, edge.weight_);
         }
     }
     return 0;
 }
 
+void ChangeFlow(IGraph& graph, const IGraph::Edge& edge, const WeightT& delta) {
+    graph.ChangeEdge(edge, delta);
+    IGraph::Edge opposite_edge = graph.GetOppositeEdge(edge.from_, edge.to_);
+    graph.ChangeEdge(opposite_edge, -delta);
+}
+
 WeightT FindMaxFlowFordFulkerson(const IGraph& graph, const VertexT source, const VertexT destination) {
-    WeightT result = 0;
+    WeightT max_flow = 0;
     WeightT additional_flow = 0;
     GraphList temp_graph(graph);
 
     std::vector<IGraph::Edge> path;
-    std::vector<bool> used_normal(graph.GetVertexesNum(), false);
     std::vector<bool> used(graph.GetVertexesNum(), false);
 
     while ((additional_flow = FindPath(temp_graph, source, destination, path, used)) > 0) {
         for (auto edge : path) {
-            temp_graph.ChangeFlow(edge, additional_flow);
+            ChangeFlow(temp_graph, edge, -additional_flow);
         }
-        result += additional_flow;
+        max_flow += additional_flow;
 
         path.clear();
-        used = used_normal;
+        used.assign(temp_graph.GetVertexesNum(), false);
     }
 
-    return result;
+    return max_flow;
 }
 
 int main() {
