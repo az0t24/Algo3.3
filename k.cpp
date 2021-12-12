@@ -18,6 +18,7 @@ struct Point {
     }
 };
 
+template <typename Data>  // Data with info about edge
 class IGraph {
 public:
     struct GraphNeighboursNode {
@@ -34,12 +35,14 @@ public:
         VertexT from_;
         VertexT to_;
         WeightT weight_;
+        Data data_;
         int32_t number_;
 
-        Edge(const VertexT& first, const VertexT& second, const VertexT& weight) {
+        Edge(const VertexT& first, const VertexT& second, const VertexT& weight, const Data& data) {
             from_ = first;
             to_ = second;
             weight_ = weight;
+            data_ = data;
             number_ = 0;
         }
 
@@ -77,7 +80,7 @@ public:
     virtual std::vector<VertexT> GetNeighboursVertex(const VertexT& vert) const = 0;
     virtual std::vector<WeightT> GetNeighboursWeight(const VertexT& vert) const = 0;
     virtual std::vector<GraphNeighboursNode> GetNeighbours(const VertexT& vert) const = 0;
-    virtual void InsertEdge(const VertexT& x, const VertexT& y, const WeightT& weight = 0) = 0;
+    virtual void InsertEdge(const VertexT& x, const VertexT& y, const WeightT& weight = 0, const Data& data = 0) = 0;
     virtual void ChangeEdge(const Edge& edge, const WeightT& delta) = 0;
     virtual Edge GetOppositeEdge(const VertexT source, const VertexT destination) = 0;
 
@@ -87,19 +90,20 @@ protected:
     bool is_oriented_ = false;
 };
 
-class GraphList final : public IGraph {
+template <typename Data>
+class GraphList final : public IGraph<Data> {
 public:
     explicit GraphList(size_t vertexes_num, size_t edges_num = 0, bool is_oriented = false) {
-        vertexes_num_ = vertexes_num;
-        edges_num_ = edges_num;
-        is_oriented_ = is_oriented;
-        adjacency_list_.resize(vertexes_num_ + 1, {});
+        this->vertexes_num_ = vertexes_num;
+        this->edges_num_ = edges_num;
+        this->is_oriented_ = is_oriented;
+        adjacency_list_.resize(this->vertexes_num_ + 1, {});
     }
 
-    explicit GraphList(const IGraph& graph) {
-        vertexes_num_ = graph.GetVertexesNum();
-        is_oriented_ = graph.IsOriented();
-        adjacency_list_.resize(vertexes_num_ + 1);
+    explicit GraphList(const IGraph<Data>& graph) {
+        this->vertexes_num_ = graph.GetVertexesNum();
+        this->is_oriented_ = graph.IsOriented();
+        adjacency_list_.resize(this->vertexes_num_ + 1);
 
         for (size_t current = 0; current < graph.GetVertexesNum(); ++current) {
             for (auto edge : graph.GetEdges(current)) {
@@ -108,11 +112,12 @@ public:
         }
     }
 
-    void InsertEdge(const VertexT& first, const VertexT& second, const WeightT& weight = 0) override {
-        if (is_oriented_) {
-            InsertEdgeOriented(first, second, weight);
+    void InsertEdge(const VertexT& first, const VertexT& second, const WeightT& weight = 0,
+                    const Data& data = 0) override {
+        if (this->is_oriented_) {
+            InsertEdgeOriented(first, second, weight, data);
         } else {
-            InsertEdgeNotOriented(first, second, weight);
+            InsertEdgeNotOriented(first, second, weight, data);
         }
     }
 
@@ -132,23 +137,23 @@ public:
         return neighbours_weights;
     }
 
-    std::vector<GraphNeighboursNode> GetNeighbours(const VertexT& vert) const override {
-        std::vector<GraphNeighboursNode> neighbours;
+    std::vector<typename IGraph<Data>::GraphNeighboursNode> GetNeighbours(const VertexT& vert) const override {
+        std::vector<typename IGraph<Data>::GraphNeighboursNode> neighbours;
         for (auto edge : adjacency_list_[vert]) {
             neighbours.push_back({edge.to_, edge.weight_});
         }
         return neighbours;
     }
 
-    std::vector<Edge>& GetEdges(const VertexT& vert) override {
+    std::vector<typename IGraph<Data>::Edge>& GetEdges(const VertexT& vert) override {
         return adjacency_list_[vert];
     }
 
-    const std::vector<Edge>& GetEdges(const VertexT& vert) const override {
+    const std::vector<typename IGraph<Data>::Edge>& GetEdges(const VertexT& vert) const override {
         return adjacency_list_[vert];
     }
 
-    void ChangeEdge(const Edge& edge, const WeightT& delta) override {
+    void ChangeEdge(const typename IGraph<Data>::Edge& edge, const WeightT& delta) override {
         int32_t i = 0;
         while (edge.to_ != adjacency_list_[edge.from_][i].to_ || edge.from_ != adjacency_list_[edge.from_][i].from_) {
             ++i;
@@ -156,58 +161,36 @@ public:
         adjacency_list_[edge.from_][i].weight_ += delta;
     }
 
-    Edge GetOppositeEdge(const VertexT source, const VertexT destination) override {
+    typename IGraph<Data>::Edge GetOppositeEdge(const VertexT source, const VertexT destination) override {
         for (auto edge : adjacency_list_[destination]) {
             if (edge.to_ == source) {
                 return edge;
             }
         }
         InsertEdge(destination, source);
-        return {destination, source, 0};
+        return {destination, source, 0, 0};
     }
 
 private:
-    std::vector<std::vector<Edge>> adjacency_list_;  // using adjacency list
+    std::vector<std::vector<typename IGraph<Data>::Edge>> adjacency_list_;  // using adjacency list
 
-    void InsertEdgeOriented(const VertexT& first, const VertexT& second, const WeightT& weight = 0) {
-        adjacency_list_[first].emplace_back(first, second, weight);
+    void InsertEdgeOriented(const VertexT& first, const VertexT& second, const WeightT& weight = 0,
+                            const Data& data = 0) {
+        adjacency_list_[first].emplace_back(first, second, weight, data);
     }
 
-    void InsertEdgeNotOriented(const VertexT& first, const VertexT& second, const WeightT& weight = 0) {
-        adjacency_list_[first].emplace_back(first, second, weight);
-        adjacency_list_[second].emplace_back(second, first, weight);
+    void InsertEdgeNotOriented(const VertexT& first, const VertexT& second, const WeightT& weight = 0,
+                               const Data& data = 0) {
+        adjacency_list_[first].emplace_back(first, second, weight, data);
+        adjacency_list_[second].emplace_back(second, first, weight, data);
     }
 };
 
-const int64_t IGraph::kUNDEFINED = 1'000'000'000;
+template <typename Data>
+const int32_t IGraph<Data>::kUNDEFINED = 1'000'000'000;
 
-std::vector<WeightT> FindShortestPathToAllVertexes(const IGraph& graph, const VertexT vertex) {
-    std::vector<WeightT> dist(graph.GetVertexesNum() + 1, IGraph::kUNDEFINED);
-    std::vector<bool> is_in_queue(graph.GetVertexesNum() + 1, false);
-    dist[vertex] = 0;
-    std::queue<VertexT> temp_queue;
-    temp_queue.push(vertex);
-    is_in_queue[vertex] = true;
-
-    while (!temp_queue.empty()) {
-        VertexT current_vertex = temp_queue.front();
-        temp_queue.pop();
-        is_in_queue[current_vertex] = false;
-
-        for (auto edge : graph.GetEdges(current_vertex)) {
-            if (!is_in_queue[edge.to_] && dist[edge.to_] > dist[current_vertex] + 1) {
-                dist[edge.to_] = dist[current_vertex] + 1;
-                temp_queue.push(edge.to_);
-                is_in_queue[edge.to_] = true;
-            }
-        }
-    }
-
-    return dist;
-}
-
-WeightT FindPathLength(const IGraph& graph, const VertexT from, const VertexT to) {
-    std::vector<WeightT> dist(graph.GetVertexesNum() + 1, IGraph::kUNDEFINED);
+WeightT FindPathLength(const IGraph<WeightT>& graph, const VertexT from, const VertexT to) {
+    std::vector<WeightT> dist(graph.GetVertexesNum() + 1, IGraph<WeightT>::kUNDEFINED);
 
     dist[from] = 0;
 
@@ -215,8 +198,8 @@ WeightT FindPathLength(const IGraph& graph, const VertexT from, const VertexT to
         for (VertexT current_vertex = 1; current_vertex < static_cast<VertexT>(graph.GetVertexesNum() + 1);
              ++current_vertex) {
             for (auto edge : graph.GetEdges(current_vertex)) {
-                if (dist[edge.from_] <= edge.time_out_ && edge.time_in_ < dist[edge.to_]) {
-                    dist[edge.to_] = edge.time_in_;
+                if (dist[edge.from_] <= edge.data_ && edge.data_ - edge.weight_ < dist[edge.to_]) {
+                    dist[edge.to_] = edge.data_ - edge.weight_;
                 }
             }
         }
@@ -232,7 +215,7 @@ int main() {
     int32_t teleports = 0;
     std::cin >> stations >> start >> end >> teleports;
 
-    GraphList graph(stations, teleports, true);
+    GraphList<WeightT> graph(stations, teleports, true);
 
     for (int32_t i = 0; i < teleports; ++i) {
         VertexT from = 0;
@@ -241,7 +224,7 @@ int main() {
         WeightT time_out = 0;
         std::cin >> from >> time_out >> to >> time_in;
 
-        graph.InsertEdge(from, to, time_in, time_out);
+        graph.InsertEdge(from, to, time_out - time_in, time_out);
     }
 
     std::cout << FindPathLength(graph, start, end) << std::endl;
