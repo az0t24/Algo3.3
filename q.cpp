@@ -34,8 +34,6 @@ public:
         VertexT from_;
         VertexT to_;
         WeightT weight_;
-        WeightT time_in_;
-        WeightT time_out_;
         int32_t number_;
 
         Edge(const VertexT& first, const VertexT& second, const VertexT& weight) {
@@ -43,13 +41,6 @@ public:
             to_ = second;
             weight_ = weight;
             number_ = 0;
-        }
-
-        Edge(const VertexT& first, const VertexT& second, const WeightT& time_in, const WeightT& time_out) {
-            from_ = first;
-            to_ = second;
-            time_in_ = time_in;
-            time_out_ = time_out;
         }
 
         friend bool operator<(const Edge& first, const Edge& second) {
@@ -113,28 +104,27 @@ public:
     }
 
     std::vector<VertexT> GetNeighboursVertex(const VertexT& vert) const override {
-        std::vector<VertexT> answer(adjacency_list_[vert].size());
-        for (size_t i = 0; i < answer.size(); ++i) {
-            answer[i] = adjacency_list_[vert][i].to_;
+        std::vector<VertexT> neighbours_vertexes(adjacency_list_[vert].size());
+        for (size_t i = 0; i < neighbours_vertexes.size(); ++i) {
+            neighbours_vertexes[i] = adjacency_list_[vert][i].to_;
         }
-        return answer;
+        return neighbours_vertexes;
     }
 
     std::vector<WeightT> GetNeighboursWeight(const VertexT& vert) const override {
-        std::vector<WeightT> answer(adjacency_list_[vert].size());
-        for (size_t i = 0; i < answer.size(); ++i) {
-            answer[i] = adjacency_list_[vert][i].weight_;
+        std::vector<WeightT> neighbours_weights(adjacency_list_[vert].size());
+        for (size_t i = 0; i < neighbours_weights.size(); ++i) {
+            neighbours_weights[i] = adjacency_list_[vert][i].weight_;
         }
-        return answer;
+        return neighbours_weights;
     }
 
     std::vector<GraphNeighboursNode> GetNeighbours(const VertexT& vert) const override {
-        std::vector<GraphNeighboursNode> answer(adjacency_list_[vert].size());
-        for (size_t i = 0; i < answer.size(); ++i) {
-            answer[i].vertex_ = adjacency_list_[vert][i].to_;
-            answer[i].weight_ = adjacency_list_[vert][i].weight_;
+        std::vector<GraphNeighboursNode> neighbours;
+        for (auto edge : adjacency_list_[vert]) {
+            neighbours.push_back({edge.to_, edge.weight_});
         }
-        return answer;
+        return neighbours;
     }
 
     std::vector<Edge>& GetEdges(const VertexT& vert) override {
@@ -160,7 +150,7 @@ private:
 
 const int64_t IGraph::kUNDEFINED = 1'000'000'000;
 
-WeightT FindShortestPathsBetweenAll(const IGraph& graph, const VertexT start, const VertexT end) {
+WeightT FindShortestPath(const IGraph& graph, const VertexT start, const VertexT end) {
     std::vector<WeightT> dist(graph.GetVertexesNum() + 1, IGraph::kUNDEFINED);
     std::priority_queue<IGraph::GraphNeighboursNode> heap;
     dist[start] = 0;
@@ -249,7 +239,7 @@ int main() {
 
     FillGraph(graph, stops, lifts, max_stop + 1, lifts_num, up, down, in, out);
 
-    std::cout << FindShortestPathsBetweenAll(graph, 1, number) << std::endl;
+    std::cout << FindShortestPath(graph, 1, number) << std::endl;
 
     return 0;
 }
